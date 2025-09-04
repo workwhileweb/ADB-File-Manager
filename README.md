@@ -2,6 +2,15 @@
 
 Ever felt that copying files via MTP on Android was slow or caused issues? Introducing ADB File Manager! This program helps you copy, move and delete folders or files between your Android device and computer using ADB protocols. All you need to do is enable Android debugging on your device and connect it to your PC.
 
+## Features
+
+- **Drag and Drop Support**: Easily drag files between your computer and Android device
+- **File Operations**: Copy, cut, paste, and delete files and folders
+- **Dual Interface**: View both computer and Android device files simultaneously
+- **Progress Tracking**: Real-time progress indicators for file operations
+- **Cross-Platform**: Works on Windows and Linux
+- **Wireless ADB**: Support for wireless debugging connections
+
 
   
 ## How to use the app?
@@ -20,6 +29,16 @@ Ever felt that copying files via MTP on Android was slow or caused issues? Intro
  2. Run `linux_installer.sh` once as root to install the app. After
     installation, just run the app and connect your USB debugging
     enabled Android device to the computer.
+
+## Drag and Drop Usage
+
+The app now supports intuitive drag and drop operations:
+
+- **Upload to Android**: Drag files from your computer's file list and drop them onto the Android device list
+- **Download from Android**: Drag files from the Android device list and drop them onto your computer's file list
+- **Multiple Files**: Select multiple files (Ctrl+Click or Shift+Click) and drag them together
+- **Visual Feedback**: The interface provides visual feedback during drag operations with highlighted drop zones
+- **Status Updates**: The status bar shows current operations and completion messages
 
   
 

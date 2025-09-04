@@ -1,7 +1,8 @@
 #made by Akansh
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog, QMessageBox, QInputDialog)
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal, Qt, QUrl, QMimeData
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QDragLeaveEvent
 from mainui import Ui_MainWindow
 from mainui_dialog import Ui_Dialog
 from mainui_pb import ProgressBar_Dialog
@@ -66,6 +67,9 @@ class MainWindow(QMainWindow):
         self.ui.adb_list.itemActivated.connect(self.open_f_func)
         self.ui.adb_list.setFont(self.font)
 
+        # Enable drag and drop for both list widgets
+        self.setup_drag_drop()
+
         self.start_app_stuff()
 
         try:
@@ -75,6 +79,202 @@ class MainWindow(QMainWindow):
             print(subprocess.Popen(f"{self.adb_exec} kill-server", shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE).stdout.read().decode("utf-8").strip())
             print("closed")
             sys.exit()
+
+    def setup_drag_drop(self):
+        """Setup drag and drop functionality for both list widgets"""
+        # Enable drag and drop for computer list (source)
+        self.ui.computer_list.setDragEnabled(True)
+        self.ui.computer_list.setAcceptDrops(True)
+        self.ui.computer_list.setSelectionMode(self.ui.computer_list.SelectionMode.ExtendedSelection)
+        self.ui.computer_list.setToolTip("Drag files from here to ADB device, or drop ADB files here to download")
+        self.ui.computer_list.dragEnterEvent = self.computer_list_drag_enter_event
+        self.ui.computer_list.dragLeaveEvent = self.computer_list_drag_leave_event
+        self.ui.computer_list.dropEvent = self.computer_list_drop_event
+        self.ui.computer_list.startDrag = self.computer_list_start_drag
+        
+        # Enable drag and drop for ADB list (destination)
+        self.ui.adb_list.setDragEnabled(True)
+        self.ui.adb_list.setAcceptDrops(True)
+        self.ui.adb_list.setSelectionMode(self.ui.adb_list.SelectionMode.ExtendedSelection)
+        self.ui.adb_list.setToolTip("Drag files from here to computer, or drop computer files here to upload")
+        self.ui.adb_list.dragEnterEvent = self.adb_list_drag_enter_event
+        self.ui.adb_list.dragLeaveEvent = self.adb_list_drag_leave_event
+        self.ui.adb_list.dropEvent = self.adb_list_drop_event
+        self.ui.adb_list.startDrag = self.adb_list_start_drag
+        
+        # Create status bar for drag and drop feedback
+        self.statusBar = self.statusBar()
+        self.statusBar.showMessage("Ready - Drag and drop files between computer and ADB device")
+
+    def computer_list_drag_enter_event(self, event: QDragEnterEvent):
+        """Handle drag enter event for computer list"""
+        if event.mimeData().hasUrls() or event.mimeData().hasFormat("application/x-adb-file"):
+            event.acceptProposedAction()
+            # Visual feedback - change background color
+            self.ui.computer_list.setStyleSheet("QListWidget { background-color: #e6f3ff; }")
+            # Status bar feedback
+            if event.mimeData().hasUrls():
+                self.statusBar.showMessage("Drop files here to download from ADB device")
+            else:
+                self.statusBar.showMessage("Drop ADB files here to download to computer")
+
+    def computer_list_drag_leave_event(self, event: QDragLeaveEvent):
+        """Handle drag leave event for computer list"""
+        # Reset visual feedback
+        self.ui.computer_list.setStyleSheet("")
+        # Reset status bar
+        self.statusBar.showMessage("Ready - Drag and drop files between computer and ADB device")
+
+    def computer_list_drop_event(self, event: QDropEvent):
+        """Handle drop event for computer list (files dropped from ADB device)"""
+        # Reset visual feedback
+        self.ui.computer_list.setStyleSheet("")
+        
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            urls = event.mimeData().urls()
+            for url in urls:
+                file_path = url.toLocalFile()
+                if os.path.exists(file_path):
+                    # This is a local file being dropped, handle accordingly
+                    self.handle_local_file_drop(file_path)
+        elif event.mimeData().hasFormat("application/x-adb-file"):
+            # Handle ADB file being dropped on computer list (download from device)
+            event.acceptProposedAction()
+            adb_file_paths = event.mimeData().data("application/x-adb-file").data().decode().split("\n")
+            for adb_file_path in adb_file_paths:
+                if adb_file_path.strip():
+                    self.handle_adb_to_computer_drop(adb_file_path.strip())
+
+    def adb_list_drag_enter_event(self, event: QDragEnterEvent):
+        """Handle drag enter event for ADB list"""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            # Visual feedback - change background color
+            self.ui.adb_list.setStyleSheet("QListWidget { background-color: #e6f3ff; }")
+            # Status bar feedback
+            self.statusBar.showMessage("Drop files here to upload to ADB device")
+
+    def adb_list_drag_leave_event(self, event: QDragLeaveEvent):
+        """Handle drag leave event for ADB list"""
+        # Reset visual feedback
+        self.ui.adb_list.setStyleSheet("")
+        # Reset status bar
+        self.statusBar.showMessage("Ready - Drag and drop files between computer and ADB device")
+
+    def adb_list_drop_event(self, event: QDropEvent):
+        """Handle drop event for ADB list (files dropped from computer)"""
+        # Reset visual feedback
+        self.ui.adb_list.setStyleSheet("")
+        
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            urls = event.mimeData().urls()
+            for url in urls:
+                file_path = url.toLocalFile()
+                if os.path.exists(file_path):
+                    # This is a local file being dropped to ADB device
+                    self.handle_adb_file_drop(file_path)
+
+    def handle_local_file_drop(self, file_path):
+        """Handle when a file is dropped on the computer list"""
+        # This could be used for operations like moving files from ADB to computer
+        # For now, we'll just show a message
+        QMessageBox.information(self, "File Drop", f"File dropped on computer list: {file_path}")
+
+    def handle_adb_to_computer_drop(self, adb_file_path):
+        """Handle when an ADB file is dropped on the computer list (download from device)"""
+        # Get the current computer path
+        target_path = self.path
+        
+        # Show progress dialog
+        info = f"Downloading {adb_file_path.split('/')[-1]} to {target_path}"
+        self.show_pb_dialog(info)
+        
+        # Update status bar
+        self.statusBar.showMessage(f"Downloading {adb_file_path.split('/')[-1]} from ADB device...")
+        
+        # Create the pull command
+        pulling = f"{self.adb_exec} -s {self.selected_device} pull \"{adb_file_path}\" \"{target_path}\""
+        
+        # Execute the download
+        self.thread1 = Subprocess_cmd("pulling", "Copy", pulling, "")
+        self.thread1.finished.connect(self.pb.close)
+        self.thread1.finished.connect(self.subprocesscmd_finished)
+        self.thread1.finished.connect(lambda: self.statusBar.showMessage(f"Downloaded {adb_file_path.split('/')[-1]} successfully"))
+        self.thread1.start()
+
+    def handle_adb_file_drop(self, file_path):
+        """Handle when a file is dropped on the ADB list (upload to device)"""
+        # Get the current ADB path
+        target_path = self.adb_path
+        
+        # Show progress dialog
+        info = f"Uploading {os.path.basename(file_path)} to {target_path}"
+        self.show_pb_dialog(info)
+        
+        # Update status bar
+        self.statusBar.showMessage(f"Uploading {os.path.basename(file_path)} to ADB device...")
+        
+        # Create the push command
+        pushing = f"{self.adb_exec} -s {self.selected_device} push \"{file_path}\" \"{target_path}\""
+        
+        # Execute the upload
+        self.thread1 = Subprocess_cmd("pushing", "Copy", pushing, "")
+        self.thread1.finished.connect(self.pb.close)
+        self.thread1.finished.connect(self.subprocesscmd_finished)
+        self.thread1.finished.connect(lambda: self.statusBar.showMessage(f"Uploaded {os.path.basename(file_path)} successfully"))
+        self.thread1.start()
+
+    def computer_list_start_drag(self, supportedActions):
+        """Handle drag start from computer list"""
+        selected_items = self.ui.computer_list.selectedItems()
+        if selected_items:
+            urls = []
+            for item in selected_items:
+                item_text = item.text()
+                if self.os_name == "win":
+                    file_path = self.path.replace("\r", "") + "\\" + item_text.replace("\r", "")
+                elif self.os_name == "linux":
+                    file_path = self.path.replace("\r", "") + "/" + item_text.replace("\r", "")
+                
+                if os.path.exists(file_path):
+                    url = QUrl.fromLocalFile(file_path)
+                    urls.append(url)
+            
+            if urls:
+                # Create mime data with file URLs
+                mime_data = QMimeData()
+                mime_data.setUrls(urls)
+                
+                # Start drag operation
+                drag = self.ui.computer_list.createDragObject()
+                drag.setMimeData(mime_data)
+                drag.exec(Qt.CopyAction)
+
+    def adb_list_start_drag(self, supportedActions):
+        """Handle drag start from ADB list"""
+        selected_items = self.ui.adb_list.selectedItems()
+        if selected_items:
+            adb_file_paths = []
+            for item in selected_items:
+                item_text = item.text()
+                adb_file_path = self.adb_path.replace("\r", "") + "/" + item_text.replace("\r", "")
+                adb_file_paths.append(adb_file_path)
+            
+            if adb_file_paths:
+                # For ADB files, we need to create a temporary local copy or handle differently
+                # For now, we'll create a custom mime type to identify ADB files
+                mime_data = QMimeData()
+                # Join multiple paths with a separator
+                paths_text = "\n".join(adb_file_paths)
+                mime_data.setData("application/x-adb-file", paths_text.encode())
+                mime_data.setText(paths_text)
+                
+                # Start drag operation
+                drag = self.ui.adb_list.createDragObject()
+                drag.setMimeData(mime_data)
+                drag.exec(Qt.CopyAction)
 
 
     def init_win_dialog(self, n):
